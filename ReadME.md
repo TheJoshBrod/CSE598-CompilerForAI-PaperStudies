@@ -12,7 +12,7 @@ My learning journey of Compilers for AI course at the University of Michigan
 |------|--------|-------------|-------------|
 | **Aug 25-27** | Course Introduction & Overview<br>Introduction to Compilers for AI | Lecture |  |
 | **Sep 1-3** | Labor Day (Holiday)<br>Foundations of AI Compiler Systems | Lecture |  |
-| **Sep 8-10** | [Open]<br>[DSPy](https://arxiv.org/pdf/2310.03714), [TVM](https://arxiv.org/abs/1802.04799)  | Papers and Discussion | [DSPy Vibe Notes](https://chatgpt.com/share/68c1cb43-3c10-8005-99d9-82b132926b74) |
+| **Sep 8-10** | [Open]<br>[DSPy](https://arxiv.org/pdf/2310.03714), [TVM](https://arxiv.org/abs/1802.04799)  | Papers and Discussion | [DSPy Vibe Notes](https://chatgpt.com/share/68c1cb43-3c10-8005-99d9-82b132926b74) [TVM Vibe Notes](https://chatgpt.com/share/68c1d17a-304c-8005-9bc8-cd18ac4cd84b)|
 | **Sep 15-17** | [MTP](https://arxiv.org/abs/2405.08965), [Relay](https://arxiv.org/abs/1904.08368) <br>[GEPA](https://arxiv.org/abs/2507.19457), [Ansor](https://arxiv.org/abs/2006.06762) | Papers and Discussion |  |
 | **Sep 22-24** | [Pytorch2](https://dl.acm.org/doi/10.1145/3620665.3640366), [TorchBench](https://arxiv.org/abs/2304.14226) <br>[TorchTitan](https://arxiv.org/abs/2410.06511), [ECLIP](https://arxiv.org/abs/2506.12598) | Papers and Discussion|  |
 | **Sep 29 - Oct 1** | [Triton](https://dl.acm.org/doi/10.1145/3315508.3329973), [Geak](https://arxiv.org/abs/2507.23194) <br>[OpFusion](https://arxiv.org/abs/2301.13062), [MemSafeXLA](https://arxiv.org/abs/2206.14148) |Papers and Discussion |  |
