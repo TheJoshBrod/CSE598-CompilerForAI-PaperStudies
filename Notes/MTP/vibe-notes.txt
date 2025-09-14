@@ -1,0 +1,586 @@
+You said:
+I am reading the Arxiv paper: 
+
+"MTP: A Meaning-Typed Language Abstraction for AI-Integrated Programming"
+
+
+Below is an excerpt could you explain what being available at source code level but lost at bytecode level means in this context?
+"""
+When a by call site is encountered, we perform static analysis to extract relevant code semantics, 
+which are used later at runtime to automatically generate prompts for the LLM inference. These
+relevant semantics, such as object types and function/argument signatures, are available at the
+source code level and might be lost at the bytecode level.
+"""
+
+
+ChatGPT said:
+Great question — this excerpt is about what kinds of information the system can see depending on whether it’s looking at the source code (the Python/Java/whatever the programmer writes) versus the bytecode (the lower-level instructions the compiler or interpreter executes).
+
+Here’s what they mean:
+
+At the source code level:
+The code still has rich, human-level semantics — things like:
+
+Type hints (def foo(x: int) -> str: tells us x should be an int and the return value a str)
+
+Named arguments (foo(name="Alice") vs. foo("Alice"))
+
+Function signatures (parameter names, default values, docstrings, etc.)
+
+Class and object structures (e.g., User vs Product)
+
+Variable names (user_id vs. x gives semantic hints)
+
+This information can be directly analyzed and used to generate meaningful prompts for the LLM.
+
+At the bytecode level:
+Much of this structure is stripped away or compiled into generic instructions. For example:
+
+The function call foo(x=3) might just become something like “push 3, call function at address 0x01A”.
+
+Type hints are usually not preserved — the runtime may not know x is an int, only that it’s some object.
+
+Argument names and variable names may be optimized away or replaced with stack/register references.
+
+Comments, docstrings, and higher-level abstractions are gone.
+
+So “available at source code level but lost at bytecode level” means: if you analyze the original code, you can still see all the rich semantic information that tells you what the programmer intended. But once the code is compiled down to bytecode, most of that context is erased — leaving only the minimal instructions the machine needs to execute.
+
+In this paper’s context, they want to leverage those higher-level semantics (like function signatures, argument types, and variable names) to automatically craft better prompts for LLM inference. That’s only possible if you analyze at the source code level, not the bytecode level.
+
+Would you like me to give you a concrete side-by-side example (Python source vs. Python bytecode) so you can see exactly what gets lost?
+
+You said:
+What is an abstract syntax tree?
+ChatGPT said:
+An abstract syntax tree (AST) is a structured, tree-shaped representation of source code that captures its syntactic structure and hierarchy, but in a way that is more abstract than just raw text.
+
+Think of it as the compiler’s or interpreter’s "mental model" of your code.
+
+Key points about ASTs:
+Abstract:
+It doesn’t preserve every character (like whitespace, comments, or exact parentheses placement), only the meaningful structure of the program.
+
+Syntax tree:
+Each node in the tree represents a language construct:
+
+Expressions (a + b)
+
+Statements (if, for, while)
+
+Functions, classes, variables, etc.
+
+Hierarchy:
+The tree reflects the nested structure of the code. For example, an if statement node has child nodes for its condition and for the block of statements inside.
+
+Example
+Python code:
+
+x = 3 + 4
+AST form (simplified):
+
+Assign
+ ├─ Target: Name(id='x')
+ └─ Value: BinOp
+      ├─ Left: Constant(value=3)
+      ├─ Operator: Add()
+      └─ Right: Constant(value=4)
+Here:
+
+The root is an Assign node (an assignment statement).
+
+The target is x (a variable).
+
+The value is a BinOp (binary operation) with left operand 3, operator +, and right operand 4.
+
+Why is it useful?
+Compilers/interpreters: Use the AST to understand the structure before generating bytecode or machine code.
+
+Static analysis tools: Can detect bugs, enforce coding style, or extract semantics (like the paper you’re reading).
+
+Code transformation: Tools like linters, formatters, or transpilers often work on the AST instead of raw text.
+
+LLM-integrated programming (like in MTP): ASTs let you preserve semantic details (types, signatures, etc.) that are useful for prompting or reasoning.
+
+👉 Do you want me to show you how to actually generate and visualize the AST of a Python snippet, so you can see the difference between source code, AST, and bytecode?
+
+You said:
+Algorithm 1 MT-IR Constructor Algorithm
+Require: Code Base 𝐶, Semantic Registry 𝑆
+Ensure: MT-IR Map 𝑀
+1: Initialize MT-IR 𝑀 ← ∅
+2: for each by𝑖 call-site in 𝐶 do
+3: if by𝑖
+is a function-call with name 𝑓𝑖
+then
+4: Initialize 𝑀 [by𝑖
+] ← ⟨𝑓𝑖
+, (𝑇1, . . . ,𝑇𝑛 ) → 𝑇𝑟 ,𝑚, 𝜃 ⟩ {From equation 1}
+5: else if by𝑖
+is a method-call 𝑚𝑡ℎ𝑖
+in object of class 𝐶𝑗
+then
+6: Initialize 𝑀 [by𝑖
+] ← ⟨𝑚𝑡ℎ𝑖
+,𝐶𝑗
+, (𝑇1, . . . ,𝑇𝑛 ) → 𝑇𝑟 ,𝑚, 𝜃 ⟩ {From equation
+5}
+7: else if by𝑖
+is an object-initialization of class 𝐶𝑗
+then
+8: Initialize 𝑀 [by𝑖
+] ← ⟨𝐶𝑗
+, (𝑇1, . . . ,𝑇𝑘 ), (𝑇𝑘+1
+, . . . ,𝑇𝑛 ),𝑚, 𝜃 ⟩ {From equation 4}
+9: end if
+10: % Extract Parameter Type Semantics:
+11: for each type 𝑇𝑗
+in input types of 𝑀 [by𝑖
+] do
+12: 𝑡 𝑦𝑝𝑒_𝑑𝑒 𝑓𝑗 ← ExtractTypeDefinition(𝑇𝑗
+, 𝑆 )
+13: Add 𝑡 𝑦𝑝𝑒_𝑑𝑒 𝑓𝑗
+to 𝑀 [by𝑖
+]
+14: end for
+15: % Extract Return Type Semantics:
+16: for each type 𝑇𝑗
+in output/return types of 𝑀 [by𝑖
+] do
+17: 𝑡 𝑦𝑝𝑒_𝑑𝑒 𝑓𝑗 ← ExtractTypeDefinition(𝑇𝑗
+, 𝑆 )
+18: Add 𝑡 𝑦𝑝𝑒_𝑑𝑒 𝑓𝑗
+to 𝑀 [by𝑖
+]
+19: end for
+20: end for
+21: return �
+
+
+Explain the following algorithm. (think hard)
+ChatGPT said:
+
+Thought for 16s
+Explanation of Algorithm 1 (MT-IR Constructor)
+High-level purpose.
+This algorithm walks the source code and builds an MT-IR map M (Meaning-Typed Intermediate Representation). M associates every byᵢ call-site (the program points where the MTP system will invoke or consult a model — the paper’s by annotations) with rich semantic metadata: the kind of call (function / method / object construction), the signature (input types → return type), and detailed type definitions fetched from a semantic registry S. The resulting M is what the runtime later uses to automatically craft accurate prompts for the LLM.
+
+Below I break the algorithm into small logical chunks and explain what each does, why it matters, and what the fields mean.
+
+Inputs / output
+Input
+
+C — the code base (source-level representation or AST) to analyze.
+
+S — a Semantic Registry: a lookup service / database that maps type names to their definitions (fields, methods, docs, invariants, etc.).
+
+Output
+
+M — an MT-IR map: a mapping from each byᵢ call-site to a tuple containing call metadata and expanded type definitions.
+
+Step-by-step walkthrough
+Lines 1–2: initialize and iterate
+M ← ∅ — start with an empty map.
+
+for each byᵢ call-site in C do — for every place in the source where the program uses the by mechanism (i.e., an LLM-integrated call site), analyze it statically.
+
+Practical note: because this runs over source or AST, it can see function names, parameter names, type annotations, class names, docstrings — things that might not survive compilation to bytecode.
+
+Lines 3–9: classify the call and create an initial entry
+The algorithm detects what kind of call byᵢ is and initializes M[byᵢ] accordingly.
+
+If byᵢ is a function call with name fᵢ:
+
+M[byᵢ] ← ⟨ fᵢ, (T1, …, Tn) → Tr, m, θ ⟩
+fᵢ = function name.
+
+(T1,…,Tn) = input parameter types (from source signature).
+
+Tr = return type.
+
+m, θ = extra metadata/annotations (paper references them via equations — typical uses: calling mode, model/config parameters, prompt template tag, or other call-specific flags).
+
+If byᵢ is a method call mthᵢ on an object of class Cj:
+
+M[byᵢ] ← ⟨ mthᵢ, Cj, (T1, …, Tn) → Tr, m, θ ⟩
+adds the owning class Cj to place the method in its object context.
+
+If byᵢ is an object initialization of class Cj:
+
+M[byᵢ] ← ⟨ Cj, (T1, …, Tk), (Tk+1, …, Tn), m, θ ⟩
+here the algorithm records two type lists — the paper’s equations likely distinguish constructor/positional parameters vs. other initialization parameters or required vs optional fields. (At minimum it captures which types are involved in creating the object.)
+
+This step turns a syntactic call site into a compact, typed signature entry that the system can reason about.
+
+Lines 10–19: enrich the entry with type semantics
+Two loops extract detailed semantics:
+
+Lines 11–14: For each input type Tj in the call signature:
+
+Call ExtractTypeDefinition(Tj, S) to get a type definition (let’s call it type_def_j).
+
+Add type_def_j into M[byᵢ].
+
+Lines 16–19: For each output/return type Tj (could be a single type Tr or multiple):
+
+Likewise extract the return type definitions and attach them to the entry.
+
+What does ExtractTypeDefinition(T, S) produce? Typical contents:
+
+The type’s structure (fields and their types).
+
+Field names and optional/default values.
+
+Public methods and their signatures.
+
+Invariants, enum members, allowed ranges.
+
+Documentation strings, examples.
+
+Subtyping / inheritance information (base classes, interfaces).
+
+Serialization shape (useful for validating LLM outputs).
+This is what converts a bare type name into a machine usable semantic description that can be fed to an LLM as context or constraints.
+
+Lines 20–21: finish
+After processing every by call site, return the completed M. The runtime component can now consult M to build prompts that include type structure, field names, and constraints — improving correctness, formatting, and post-validation.
+
+Why this matters (connection to the paper)
+The algorithm explicitly works at source/AST level to recover type and signature information that often isn’t present in compiled bytecode. That richer source info enables much better automatic prompt construction: the LLM can be told the shape of the expected output (field names, nested types, enums), not just a free-text instruction.
+
+m and θ allow call-site specific policy or LLM config (e.g., use structured JSON output, apply extra validation rules, or choose a particular prompting strategy).
+
+Example (concrete)
+Source snippet:
+
+# annotated source code
+def summarize_user(u: User, include_history: bool=False) -> Summary:
+    ...
+# somewhere:
+result = by(summarize_user(user_obj, True))
+Algorithm actions:
+
+Detect by call-site; see it is a function call to summarize_user.
+
+Initialize M[by] = ⟨"summarize_user", (User, bool) → Summary, m, θ⟩.
+
+ExtractTypeDefinition(User, S) might return {fields: {id:int, name:str, email:str, history: List[Event]}, doc: "..."}
+
+ExtractTypeDefinition(Summary, S) returns {fields: {text: str, highlights: List[str]}}
+
+Final M[by] contains the full signature plus nested descriptions of User and Summary. The runtime can now build a prompt like: “Given a User {id:int, name:str, email:str, history: [...]}, produce a Summary object with fields text (string) and highlights (list of strings) ...”
+
+Complexity & practical issues
+Complexity: roughly linear in number of by call-sites × number of types per site × cost of registry lookup / type expansion.
+
+Limitations:
+
+Works best when source-level type annotations exist. In dynamic/weakly typed code, you may need type inference or heuristics (and the algorithm must annotate "unknown" when no information exists).
+
+Polymorphism, union types, generics, and runtime duck typing complicate extraction — the registry/S must encode these cases or the algorithm needs interprocedural analysis.
+
+If source is not available (only bytecode), much of the useful semantic structure will be missing — which is precisely the problem the paper calls out.
+
+Summary
+Algorithm 1 systematically converts by call-sites into a typed, semantically enriched intermediate representation (M) by:
+
+classifying each call (function / method / constructor),
+
+recording its signature and extra metadata (m, θ), and
+
+expanding every referenced type via a semantic registry into concrete type definitions.
+
+That enriched M is the basis for later runtime steps (automatic prompt generation, output validation, etc.), and it depends on source-level information that would be hard or impossible to recover purely from bytecode.
+
+You said:
+ Prompt Synthesis. Upon the triggering of a by call, MT-Runtime first retrieves the MTIR which is relevant to that particular by call-site and uses its information to fill a generalized
+prompt template. Based on the location of the by call-site, MT-Runtime constructs a prompt that
+incorporates static semantics, dynamic variable values relevant to the call-site, and the expected
+output type. As the MT-Runtime resides on the language VM as shown in Figure 10, it has access
+to the variable values at runtime. In Figure 11, this can be seen where the semantic information is
+fetched from the MT-IR while the variable values are fetched from the languages object graph. The
+synthesized prompt can be seen in Figure 9d. Here, the function name determines the ‘Action’ in the
+prompt, representing the intended task, while type information and nested types are included under
+‘Type_Explanations’ in the prompt. Additionally, the inclusion of the output type and other schema
+information in the prompt forces the LLM to generate the output as per the defined schema, making
+it easier to convert in the type conversion stage. This stage address the challenge of generating
+meaningful but concise prompts discussed in §3 as C3.
+
+So to summarize the above, prompt synthesis occurs through combining the AST generated from the MT-IR with the MT-RT AST to assign variable names/types to their actual values during runtime. This allows the prompt to contain the full context of the AST?
+ChatGPT said:
+You’ve got the right idea, but let’s refine it a bit so it’s precise to what the paper describes.
+
+What’s happening in Prompt Synthesis
+Static semantics from MT-IR
+
+Built ahead of time (Algorithm 1 you read earlier).
+
+Captures the static structure of the call site:
+
+Function/method name → “Action” in the prompt.
+
+Input/output type signatures.
+
+Expanded type definitions (nested fields, schema, constraints).
+
+This is essentially a semantic AST fragment for the call.
+
+Dynamic runtime values from MT-Runtime (MT-RT)
+
+When the by call actually triggers, the VM has access to the runtime object graph (i.e., the actual live values of the variables at that point).
+
+So it can take the types recorded in MT-IR (e.g., parameter user: User) and fill in the concrete instance values (e.g., user = {id: 42, name: "Alice"}).
+
+Prompt construction
+
+These two pieces are combined:
+
+Static semantics → constraints, type schemas, expected structure.
+
+Dynamic values → the concrete inputs at that call.
+
+The output type schema is also included, so the LLM knows exactly what structure to generate (making post-conversion and validation possible).
+
+Answer to your summary
+“Prompt synthesis occurs through combining the AST generated from the MT-IR with the MT-RT AST to assign variable names/types to their actual values during runtime. This allows the prompt to contain the full context of the AST?”
+
+Almost — here’s a cleaner phrasing:
+
+👉 Prompt synthesis combines the static semantic AST from MT-IR with the runtime object graph (MT-RT’s dynamic view) to create a prompt that has both the code’s intended structure and the actual data values at the call site.
+
+It’s not that the prompt literally contains the entire AST of the program, but rather a focused slice:
+
+the call’s action (function/method name),
+
+its parameter/return type schemas (expanded via MT-IR),
+
+and the current runtime values of those parameters.
+
+That way, the LLM gets both the “what this call means” and the “what data it’s operating on”, in a structured, schema-guided prompt.
+
+Would you like me to sketch a toy example prompt (showing how MT-IR + runtime values merge into the final LLM input)? That might make it concrete.
+
+You said:
+Explain what is LMQL, give examples
+ChatGPT said:
+Got it — let’s dig into LMQL.
+
+What is LMQL?
+LMQL (Language Model Query Language) is a programming language designed specifically for interacting with large language models (LLMs).
+
+It combines:
+
+Structured query syntax (inspired by SQL-like clarity),
+
+Constraints (logical conditions, type restrictions, formatting rules),
+
+and Integration with LLMs (so you can declaratively specify what you want the model to generate, rather than fiddling with raw prompts).
+
+Think of it as a “query language” for LLMs that lets you:
+
+Write prompts with placeholders and constraints.
+
+Control the form of the model’s output (e.g., JSON, lists, booleans).
+
+Integrate model outputs into larger programs in a reliable way.
+
+Why LMQL?
+Normally, when you ask an LLM for something, you have to:
+
+Hand-craft a prompt.
+
+Parse unstructured natural language output.
+
+Hope it’s formatted correctly.
+
+LMQL solves this by:
+
+Letting you embed constraints directly in your query.
+
+Producing outputs that conform to schemas (lists, JSON, enums).
+
+Giving you a DSL (domain-specific language) that can orchestrate multi-step queries.
+
+Examples
+1. Simple query
+lmql
+query {
+    "What is the capital of France?"
+}
+This just sends the string to the model — like a normal prompt.
+
+2. Constrained output
+lmql
+query {
+    "What is the capital of France? Answer with one word."
+    answer = STRING
+}
+STRING tells LMQL to enforce a single string token.
+
+The model can’t respond with extra text like “The capital of France is Paris”.
+
+It will only return Paris.
+
+3. Multiple-choice constraint
+lmql
+query {
+    "Is Python statically typed or dynamically typed?"
+    answer in ["statically typed", "dynamically typed"]
+}
+LMQL ensures the model picks one of the allowed options.
+
+You get structured, predictable results.
+
+4. JSON-like schema
+lmql
+query {
+    "Extract information about this person: Elon Musk"
+    person = {
+        "name": STRING,
+        "profession": STRING,
+        "companies": LIST(STRING)
+    }
+}
+The LLM is forced to output JSON matching this schema.
+
+Parsing becomes trivial — you get a dictionary with fields.
+
+5. Compositional queries
+LMQL lets you chain queries and conditions:
+
+lmql
+query {
+    "Suggest three programming languages to learn in 2025."
+    languages = LIST(STRING, length=3)
+    
+    "Pick the one best suited for AI research."
+    best in languages
+}
+First part: extract a list of three languages.
+
+Second part: restrict the answer to one of those three.
+
+How it relates to what you’re reading (MTP paper)
+LMQL and MTP both address the same pain point: raw LLM calls are unstructured and fragile.
+
+LMQL provides a declarative query language and constraints.
+
+MTP/MT-IR builds a type-aware abstraction layer at the language/runtime level.
+
+Both approaches try to ensure LLM calls are semantically safe, predictable, and programmatically useful.
+
+⚡ In short: LMQL is like SQL for LLMs — a language to query and constrain what models produce.
+
+Would you like me to also show you what the equivalent LMQL query looks like in plain Python code (so you can see the difference between raw prompting vs LMQL)?
+
+You said:
+What are some limitations of this paper or the concepts proposed? (think hard)
+ChatGPT said:
+
+Thought for 51s
+Limitations of MTP — concise, critical reading (think-hard)
+Short TL;DR — MTP is an interesting and practical approach (implemented in Jac) that leverages source-level semantics to automatically synthesize prompts and do structured output conversion. But it trades off generality, security, and some engineering complexity for that convenience. Below I group the main limitations, explain why each matters, and give short mitigations you could try.
+
+1) Reliance on source-level, semantically rich code
+What / why: MTP’s MT-IR and prompt synthesis depend on extracting types, function signatures, and names from the source (or AST) so the runtime can produce schema-aware prompts. That assumption is explicit in the paper — MT-IR collects and preserves variable names, signatures and types so prompts can be synthesized. 
+arXiv
+
+Problem: many real-world codebases:
+
+use dynamic typing (no annotations),
+
+have missing/incorrect types,
+
+are compiled/obfuscated or only available as bytecode, or
+
+use aggressive minification/optimizations that lose names — in those cases MT-IR will be incomplete or wrong.
+Mitigations: integrate static inference + runtime tracing (collect shapes at runtime), fall back to probabilistic type prediction, or provide developer tooling to add lightweight annotations. But these add complexity and may not fully close the gap.
+
+2) Non-determinism / hallucination / faithfulness limits of LLMs
+What / why: The paper acknowledges non-deterministic model outputs and the need to convert/validate them into typed program objects. MTP reduces fragility by including schema information, but it cannot eliminate inherent LLM failure modes (fabrications, omitted fields, wrong types). 
+arXiv
+
+Problem: LLMs still hallucinate, produce plausible-but-incorrect values, or produce outputs that superficially match a schema but are semantically wrong — this is a fundamental limitation of current LLMs. 
+OpenAI
++1
+
+Mitigations: add verification layers: retrieval/grounding, deterministic validators, verification queries (ask the model to justify/explain), majority-vote / ensemble checks, or run lightweight symbolic checks after conversion. Treat LLM output as an oracle with uncertainty rather than a deterministic function.
+
+3) Security, privacy and prompt-injection / data-leakage risks
+What / why: MTP’s runtime constructs prompts that include live variable values (the object graph). That makes it easy to expose sensitive runtime data (PII, secrets) to an external model endpoint. The system also opens up attack surface for prompt injection or adversarial inputs. The general prompt-injection threat to model pipelines is well documented. 
+arXiv
++2
+OWASP Gen AI Security Project
++2
+
+Problem: Sensitive data could be sent to third-party models, or data in prompts could be manipulated to alter subsequent model behavior.
+Mitigations: redact/sanitize or tokenize sensitive fields before sending; enforce allow-lists; run models in a trusted on-prem or vetted enclave; add a mandatory privacy policy layer that prevents sending secrets; and run adversarial / prompt-injection tests as part of CI.
+
+4) Portability & language / ecosystem constraints
+What / why: The paper’s implementation and evaluation are done in Jac (a Python superset). Porting MTP requires compiler/runtime integration (MT-IR construction, MT-Runtime) into the target language VM. The paper implements the approach as a Jac compilation pass and a runtime plugin. 
+arXiv
+
+Problem: bringing the same functionality to Java, JavaScript, Rust, or compiled ecosystems (and their tooling and package managers) is non-trivial, and each ecosystem has its own semantics (ownership, mutability, typing) that complicate MT-IR design.
+Mitigations: design language-agnostic MT-IR abstractions, provide adapters/bridges, or implement MTP as libraries that fall back to runtime tracing when deep compiler hooks are not available — but expect engineering cost.
+
+5) Semantic registry correctness & maintenance cost
+What / why: MT-IR relies on a semantic registry to expand types into structured type definitions for prompts (fields, nested types, constraints). Generating and maintaining this registry for large, evolving codebases is a non-trivial engineering effort; the paper explicitly includes a registry generation stage in MT-IR. 
+arXiv
+
+Problem: stale or incorrect registry entries produce misleading prompts (garbage-in → garbage-out). Keeping the registry up to date across multiple modules, dependency versions, and runtime variants requires tooling and governance.
+Mitigations: auto-generate registry entries from type annotations and docstrings, add CI checks to detect drift, and allow developers to opt-in/override registry entries.
+
+6) Operational cost, latency and scalability trade-offs
+What / why: The paper reports cost and runtime advantages on their benchmarks and models, but those are workload-dependent and measured at a specific scale. Real deployments with high QPS or strict latency SLAs may face different tradeoffs. 
+arXiv
+
+Problem: runtime LLM calls (especially to high-quality models) add latency and monetary cost; frequent or fine-grained by calls can magnify this. The paper’s benchmarks are promising, but they don’t guarantee similar results for every production workload.
+Mitigations: cache model outputs, batch or coalesce calls, use smaller distilled models for hot paths, perform offline precomputation, or hybrid approaches (rules + LLMs) to limit inference volume.
+
+7) Debugging, testing, and reproducibility challenges
+What / why: Abstracting functionality into by model calls hides logic behind an opaque model; non-deterministic outputs make unit testing and step-by-step debugging harder. The paper notes the need to handle and convert non-deterministic outputs. 
+arXiv
+
+Problem: failures may be caused by prompt synthesis, model drift, or data issues — tracing back from a wrong result to the root cause is more complex than with deterministic code.
+Mitigations: provide strong observability (record prompts, model responses, metadata), deterministic test harnesses that mock LLM responses, and replay logs to reproduce bugs.
+
+8) Bias, fairness and domain hazards
+What / why: Any system that relies on general LLMs inherits those models’ biases and failure modes; LLM outputs can amplify social or domain-specific biases. This is a broad LLM risk supported by many studies. 
+Nature
++1
+
+Problem: using LLMs “in the loop” for critical decisions (legal, health, hiring) can produce unfair or unsafe outputs even if the prompt is structured.
+Mitigations: apply domain-specific models or fine-tuning, add fairness checks, human-in-the-loop gating for sensitive outputs, and rigorous bias evaluation.
+
+9) Evaluation limits in the paper (scope and generality)
+What / why: The paper evaluates MTP on a set of benchmarks, case studies, and a 20-person user study, and reports strong numbers (LOC reductions, accuracy, cost) — but those results reflect the selected tasks, models and participant pool. 
+arXiv
++1
+
+Problem: 20 participants and benchmark suites can show strong signals but cannot capture long-term maintainability, diverse enterprise codebases, or adversarial usage. There may be selection bias (benchmarks suited to schema-style prompting).
+Mitigations: longer real-world deployments, larger/longitudinal user studies, open benchmarks across more domains, and independent replication will strengthen confidence.
+
+10) Edge cases: complex reasoning, multimodality, and multi-stage workflows
+What / why: For tasks requiring deep internal symbolic reasoning, long chains of thought, or multi-modal perception tightly integrated with code semantics, schema prompts may not be enough. The paper does show some multimodal examples, but complexity grows rapidly. 
+arXiv
+
+Problem: complex pipelines that need intermediate state, iterative refinement, or tightly-coupled multi-stage decisions may require richer control than a single synthesized prompt can provide.
+Mitigations: compose LLM calls with explicit control flow, use programmatic orchestration (controllers that validate and re-query), or hybrid symbolic + neural pipelines.
+
+Final suggestions / what I’d watch for if you want to use or extend MTP
+Start small & instrument heavily — prototype with low-risk components, log prompts/responses, and verify correctness automatically.
+
+Build privacy & security checks into the runtime — automatic redaction, secrets detection, allow-lists, and prompt-injection tests.
+
+Combine static inference with runtime tracing to handle unannotated code.
+
+Design a fail-soft policy — when the LLM fails, fall back to deterministic logic or human review.
+
+Push for larger real-world trials so the community can see how the approach performs at scale and across domains.
+
+If you want, I can:
+
+extract specific paragraphs from the paper that discuss the authors’ own stated challenges and show them inline (I already cited the relevant sections), or
+
+produce a small decision checklist for whether MTP is a good fit for a particular project (e.g., constraints on latency, data sensitivity, presence of types). Which would you prefer?
+
