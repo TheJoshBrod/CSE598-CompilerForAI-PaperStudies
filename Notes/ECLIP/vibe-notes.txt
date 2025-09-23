@@ -1,0 +1,211 @@
+You said:
+Observation 2. The GPU can accommodate a finite number of
+CU masked streams before experiencing slowdown due to queue
+oversubscription.
+As shown in Figure 1b, with up to 7 CU masked streams, there
+is relatively stable performance. However, latency significantly and
+unpredictably rises with each subsequent CU masked stream.
+This likely stems from the GPU’s limited number of hardware
+queues. Whenever a CU masked stream is created, there is a corresponding command queue created within the software runtime, i.e.,
+HSA queues in ROCm. While these queues help the concurrency of
+multiple kernels, performance issues arise once the number of HSA
+queues exceeds the number of physical hardware queues. In such
+cases, the GPU must oversubscribe HSA queues to hardware queues,
+where the hardware periodically switches between all allocated HSA
+queues [28], resulting in longer latencies. Similar performance issues
+have been reported on the latest generations of GPUs, including AMD
+RX9700 XT.
+The above experiment informs our design decision. Including a
+default stream in ROCm, the total number of streams we can support
+on our GPU is 8, matching the number of hardware queues [29], [30].
+Therefore, to prevent significant oversubscription overheads, we need
+to limit our creation of CU masked streams to 7
+
+summarize this in simpler terms
+ChatGPT said:
+Here’s a simpler version of that explanation:
+
+The GPU can only handle a certain number of compute unit (CU) masked streams efficiently. Up to 7 streams, performance stays stable. But when more streams are added, performance drops and latency becomes unpredictable.
+
+This happens because each stream creates a software command queue (HSA queue). The GPU has a limited number of hardware queues (in this case, 8 total, including the default stream). Once the number of software queues is greater than the available hardware queues, the GPU has to share (oversubscribe) them, constantly switching between queues. That extra switching causes slowdowns.
+
+Design takeaway: Only create up to 7 CU masked streams (plus the default one) to avoid oversubscription and performance issues.
+
+Would you like me to also make a 1–2 sentence version for quick reference?
+
+You said:
+Observation 1. CU masking IOCTL calls have high and unpredictable timing overheads
+
+We observed a significant slowdown from calling the CU mask
+IOCTL call every kernel. In Figure 1a, we show the 8 longest running
+kernels averaged over 100 inference requests, and compare their
+latency with or without per-kernel CU masking. In the worst scenario, the CU IOCTL overhead is 55.4 µs, over 2x the kernel execution time
+of 19.8 µs. 
+
+The next experiment explores whether the number of CU masked 
+streams introduce additional overheads. This is important since model
+co-location requires multiple concurrent streams, each with unique
+CU masks. We create an increasing number of CU masked streams
+(each with 3 unique CUs) and distribute inference kernels across these
+streams in a round-robin fashion. HSA barrier packets in ROCm are
+used to ensure that kernels execute in correct sequence to maintain
+their data dependencies (see Sec. IV-A for details).
+
+summarize this in simpler terms
+ChatGPT said:
+Here’s a simpler version of Observation 1:
+
+Calling the CU masking IOCTL too often is very costly and unpredictable. If it’s done for every kernel, the overhead can be much larger than the kernel’s own execution time (e.g., 55.4 µs overhead vs. 19.8 µs kernel time).
+
+Since running multiple models together (model co-location) needs several streams with different CU masks, the next experiment tests whether adding more CU-masked streams also adds extra overhead. To do this, kernels are spread across multiple streams, with barriers used to keep the execution order correct.
+
+Would you like me to make a combined simplified summary of both Observation 1 and 2 so you have a clean, unified explanation?
+
+You said:
+B. Resource Allocation Optimizer
+To further minimize the impact of fine-grain spatial partitioning,
+ECLIP assigns resources to groups of kernels. ECLIP introduces a
+resource allocation optimizer that determines how many CUs a group
+of kernels will be allocated, and when to switch CU partitions (which
+determine how kernels are grouped).
+Minimum CU Threshold Profiling: We profile each kernel’s independent execution time with a single request on the GPU and identify
+a “threshold” per kernel that is the minimum number of CUs needed
+without experiencing noticeable slowdown. As shown in Figure 3
+(light blue line), different kernels within a request can have widely
+varying minimum CU thresholds, creating opportunities for efficient
+resource sharing.
+CU Switching Overhead: Frequent switches between CU configurations introduce significant overhead, as explained in Sec. IV-A.
+Each switch requires a barrier packet to maintain data dependencies,
+but excessive barrier packets can significantly degrade performance.
+Therefore, our optimizer must balance the benefits of fine-grained
+CU allocation against the overhead of configuration switches by
+considering groups of kernels together rather than optimizing each
+kernel’s CU configuration independently. Figure 3 (blue boxes) shows
+an illustrative example of how our optimizer performs CU allocation
+to groups of kernels.
+Fairness among Workers for Energy Efficiency: In co-located scenarios where multiple workers handle inference requests concurrently,
+our optimizer must ensure fairness while maximizing overall GPU
+utilization. This fairness is critical because disparate completion times
+among workers lead to idling CUs, wasting energy due to the lack of
+CU-level power gating as explained in Sec. II-B. To address this issue,
+we associate one identically weighted objective function per worker,
+where each objective function aims to minimize the execution time
+of that worker’s kernels.
+Optimization Formulation: Our optimization goal is to minimize
+execution time across all workers while maintaining fairness and
+minimizing slowdowns. For each kernel, the model must select a
+CU configuration from a predefined set of configurations that align
+with the SE organization (increment of 15 CUs. Kernel execution
+time is influenced by three factors: (i) the number of CUs allocated
+to it, (ii) the slowdown from co-location with other workers’ kernels,
+and (iii) the overhead of CU configuration switches.
+Factor (i) is directly determined from profiling data. Factor (ii) is
+modeled based on CU sharing because the slowdown experienced
+by workers tends to be proportional to their CU overlap, e.g., higher
+slowdown with more shared CUs. Hence, we compute this by tracking
+the average number of CUs used by each worker and determining
+potential overlap between workers. To minimize factor (iii), we
+introduce barrier packet budget that constrains the total number of
+CU configuration switches allowed within each worker’s request.
+The mathematical formulation of our model is as follows. The
+model’s objective function is to minimize the summation of kernel
+execution time for all kernels in each worker, with equal weights for
+all workers for fairness:
+∀w, minimizeP
+k∈w
+ek
+where w is a worker and ek is the estimated execution time of a
+kernel k in co-located scenarios.
+Let xk,c be the main decision variable representing whether the
+CU configuration c ∈ configs is selected for the kernel k, where
+configs = {15, 30, 45, 60} is the set of available CU configurations.
+xk,c = 1 if k uses the configuration c, and xk,c = 0 otherwise.
+With xk,c, we introduce the following constraints for configuration
+selection:
+• ∀k ∈ w,P
+c∈configs xk,c = 1: This forces the model to assign only
+one configuration to each kernel.
+• switchTotalw =
+P
+k∈w
+P
+c∈configs |xk,c − xk−1,c|/2: This counts
+the total number of switches occured for a worker w. The term
+|xk,c − xk−1,c| detects a switch between consecutive kernels as
+their x values differ when using different configurations. Division
+by 2 is to correct for double counting.
+• switchTotalw ≤ switchMax: Barrier packet budget constraint
+limiting the number of switches per worker.
+The execution time ek is calculated by:
+• ek = βk ∗ (1 + αk): This is the final estimated execution time for
+a kernel k accounting for slowdown and CU selection.
+• βk = profile[
+P
+c
+xk,c ∗c]: Base solo execution time from profiling.
+Since xk,c = 1 for only one configuration c,
+P
+c
+xk,c ∗ c gives the
+selected CU count for kernel k.
+• αk = CUOverlapw/(total # of CUs): Co-location slowdown factor considering CU overlaps with other workers. Previous experiments informed this approach: two identical kernels sharing the
+same CUs both took twice as long. 3
+The CU overlap between workers is tracked by:
+• CUAveragew =
+P
+k∈w
+P
+c
+xk,c ∗ c/(# of kernels in w): Average
+number of CUs per kernel for the worker w.
+• CUOverlapw = CUAveragew +
+P
+∀w′
+:w′̸=w CUAveragew′ : Total
+number of CUs overlapping with other workers.
+The above formulation is an Integer Linear Programming (ILP)
+problem which can be solved using ILP solvers like Gurobi. Since the
+solution time of ILP can be long, we solve this offline for different colocation scenarios and store the results in a lookup table. At runtime,
+our scheduler simply references this table to get pre-computed CU
+configurations and assign kernels to the corresponding CU-masked
+streams.
+
+summarize the key points
+ChatGPT said:
+Here’s a clear, concise summary of the key points for the Resource Allocation Optimizer section:
+
+Goal: Minimize execution time of kernels while maintaining fairness and efficiency in co-located GPU workloads.
+
+Key Ideas:
+
+Group-based CU Allocation: Kernels are grouped, and resources (Compute Units, CUs) are allocated to groups rather than individually to reduce overhead from frequent CU switches.
+
+Minimum CU Threshold: Each kernel has a minimum CU requirement (profiling shows different kernels need different minimum CUs to avoid slowdown), enabling efficient sharing.
+
+CU Switching Overhead: Switching CU configurations often is costly due to barrier packets needed to maintain data dependencies. The optimizer balances fine-grained allocation with switching overhead.
+
+Fairness: Ensures all workers (concurrent request handlers) get fair GPU access to prevent idle CUs and energy waste.
+
+Optimization Model:
+
+Uses Integer Linear Programming (ILP) to select CU configurations for each kernel from a set {15, 30, 45, 60}.
+
+Minimizes total kernel execution time while considering:
+
+Base execution time from profiling.
+
+Slowdown from CU overlap with other workers.
+
+Limits on CU configuration switches (barrier budget).
+
+Execution Time Calculation:
+
+ek = βk * (1 + αk) where βk is solo execution time and αk accounts for co-location slowdown.
+
+CU overlap is tracked via average CUs per worker and total overlap with other workers.
+
+Implementation: ILP is solved offline for various co-location scenarios; results stored in a lookup table. At runtime, the scheduler assigns pre-computed CU-masked streams to kernels.
+
+Outcome: Efficient CU allocation that reduces slowdowns, limits switching overhead, and ensures fairness across workers.
+
+If you want, I can also make an even shorter 3–4 sentence version for a high-level overview. Do you want me to do that?
