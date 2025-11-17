@@ -19,9 +19,9 @@ My learning journey of Compilers for AI course at the University of Michigan
 | **Oct 6-8** | Group Presentations<br>Group Presentations | Pitches |  |
 | **Oct 13-15** | Fall Study Break (Holiday)<br>[MLIR](https://arxiv.org/abs/2002.11054), [Glow](https://arxiv.org/abs/1805.00907) |Papers and Discussion | [MLIR Notes](https://chatgpt.com/share/68ef3572-1ca0-8005-acfc-8a65e30def73), [Glow Notes](https://chatgpt.com/share/68efd4d4-8e8c-8005-b664-f33b7877ec62)|`
 | **Oct 20-22** | [Repo Deconstruct] <br> [Repo Deconstruct] | Tech Talks |  |
-| **Oct 27-29** | [EffPagedAttn](https://arxiv.org/abs/2309.06180), [EffLLMServ](https://arxiv.org/abs/2503.18292) <br>[NvidiaAmpere](https://arxiv.org/abs/2208.11174), [AMDsDTW](https://arxiv.org/abs/2403.06931) |Papers and Discussion
-| **Nov 3-5** | Group Presentations<br>Group Presentations | Updates |  |
-| **Nov 10-12** | [TPUs](https://arxiv.org/abs/2304.01433), [MTIA](https://dl.acm.org/doi/pdf/10.1145/3579371.3589348) <br>[MLFleet](https://arxiv.org/pdf/2502.06982) + [Special Guest?] | Papers and Discussion|  |
-| **Nov 17-19** | [Repo Deconstruct] <br> [Repo Deconstruct] | Papers and Discussion|  |
-| **Nov 24-26** | Flex Day <br>Thanksgiving Recess (Holiday) | Presentations |  |
+| **Oct 27-29** | [EffPagedAttn](https://arxiv.org/abs/2309.06180), [EffLLMServ](https://arxiv.org/abs/2503.18292) <br>[NvidiaAmpere](https://arxiv.org/abs/2208.11174), [AMDsDTW](https://arxiv.org/abs/2403.06931) |Papers and Discussion | [EffPagedAttn Notes](https://chatgpt.com/share/691b6994-6478-8005-8593-5478a6a08853) |
+| **Nov 3-5** | Sick Day<br>Group Presentations | Updates |  |
+| **Nov 10-12** | Group Presentations<br> [TPUs](https://arxiv.org/abs/2304.01433), [MTIA](https://dl.acm.org/doi/pdf/10.1145/3579371.3589348) | Papers and Discussion|  |
+| **Nov 17-19** | [MLFleet](https://arxiv.org/pdf/2502.06982) + [Special Guest?] <br> [Repo Deconstruct] | Papers and Discussion|  |
+| **Nov 24-26** | Flex Day (Repo Deconstruction Due) <br>Thanksgiving Recess (Holiday) | Presentations |  |
 | **Dec 1-3** | Final Project Presentations<br>Course Wrap-up & Future Directions | Presentations | |
