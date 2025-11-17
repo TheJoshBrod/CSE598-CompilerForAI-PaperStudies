@@ -1,0 +1,520 @@
+You said:
+What is the paper JENGA: Effective Memory Management for Serving LLM with Heterogeneity about?
+ChatGPT said:
+Here’s a summary of the paper Jenga: Effective Memory Management for Serving LLM with Heterogeneity (Zhang et al., 2025) including what it does, why it matters, and how it works.
+
+What the paper is about
+The paper addresses the problem of efficiently serving large language models (LLMs) in inference mode when there is heterogeneity in the model architecture — specifically, heterogeneous embedding-sizes and heterogeneous token dependency patterns. 
+ACM Digital Library
++3
+arXiv
++3
+arXiv
++3
+
+Modern LLMs increasingly deviate from the simpler “all-layers same size, full-prefix-dependency” assumption:
+
+Embedding dimensions vary (e.g., vision-language models mixing vision embeddings and text embeddings) so the key/value (KV) cache per token or per modality may differ in size. 
+arXiv
+
+Token dependency patterns can vary: some layers attend to full prefix, others attend only to a sliding window or last token (so the set of earlier tokens you must keep in memory differs by layer) — i.e., prefix-subset dependency. 
+arXiv
+
+These heterogeneities pose two main challenges:
+
+Memory fragmentation when embeddings of different sizes must all be stored in GPU memory (especially for KV caches) — simple fixed-size allocation strategies (e.g., equal sized “pages”) lead to wasted space. 
+arXiv
++1
+
+Cache / eviction policy mismatch — because different layers have different dependency patterns, you can’t treat all cached embeddings uniformly; you need layer-specific caching/eviction logic to avoid storing or scanning unnecessary memory. 
+arXiv
++1
+
+To address this, the authors propose a system called Jenga: a memory‐allocation framework built for heterogeneous embeddings in LLM inference engines.
+
+Key contributions / what Jenga does
+Here are the main innovations and mechanisms of Jenga:
+
+It proposes a two‐level memory allocator:
+
+At the bottom (compatibility layer) it uses fixed‐size “large pages” chosen so as to be compatible across different embedding sizes — specifically using the least common multiple (LCM) of embedding sizes so that large pages are a multiple of each embedding size, thereby reducing internal fragmentation. 
+arXiv
++1
+
+At the top (customization layer) each layer type (or embedding‐type) uses a customized allocator and eviction logic, tailored to its embedding size, token dependency pattern, etc. 
+arXiv
+
+It provides APIs (in the inference engine) to enable layer‐specific caching / eviction policies — for example specifying exactly which subset of prefix tokens a given layer needs, so that unneeded tokens can be evicted and memory reused more aggressively. 
+arXiv
+
+They implement Jenga on top of vLLM, a production‐level LLM inference engine. 
+arXiv
++1
+
+Empirical results: They report up to 79.6% improvement in GPU memory utilization, and up to ~4.92× improvement in serving throughput (1.80× on average) compared to baseline (vLLM without Jenga) on a variety of models / datasets / GPU configs. 
+arXiv
++1
+
+Why this is important
+As LLMs scale (in size, modalities, context length, variety of architectures) inference cost becomes huge; maximizing GPU usage (batch size, memory reuse) is key to reducing cost. The KV cache often becomes a memory bottleneck especially when batching. 
+arXiv
+
+Older systems assumed homogeneous embeddings (same size everywhere) and full‐prefix dependency — those assumptions break down for modern heterogeneous models (vision+language, sliding‐window attention, last‐token only layers). Without systems like Jenga, memory is wasted, fragmentation increases, throughput drops.
+
+By improving allocation and reuse, Jenga allows higher throughput for the same hardware (or same throughput for less hardware), which has direct cost/efficiency benefits for real‐world LLM serving.
+
+The idea of combining compatibility (via LCM page sizes) + customization (layer‐specific caches/eviction) is a reasonably general approach that could be applied beyond only one model or engine.
+
+How it works (technical details)
+Here are more of the technical details, from the paper:
+
+Heterogeneity characterization
+They show that modern LLM architectures introduce heterogeneity in two major ways: (1) embedding size heterogeneity (e.g., vision embeddings vs text embeddings vs Mamba state) and (2) token-dependency heterogeneity (some layers attend to full prefix, others only to a subset). 
+arXiv
+
+Because of this, naive “paged attention” approaches (which assume fixed embedding size and full‐prefix dependency) lose efficiency: they either over‐allocate memory, fragment, or store more than needed — leading to reduced throughput. 
+arXiv
++1
+
+Two-level allocator design
+Level 1 (Compatibility layer / LCM allocator):
+
+Compute the embedding sizes of all layers/types ahead of time.
+
+Take the least common multiple (LCM) of those sizes (or of representative sizes) — that gives a large “page size” such that each embedding size divides into it (so small embeddings can be packed without wasted space) — this reduces internal fragmentation. 
+arXiv
+
+Allocate GPU memory in units of these “large pages”.
+
+Level 2 (Customization layer / specialized allocators):
+
+For each layer type (embedding size and dependency pattern), have a specialized allocator that takes large pages from level 1 and sub-allocates smaller “small pages” tailored to that layer’s embedding size.
+
+Clients (layers) also specify their eviction/caching logic: e.g., which prefix tokens they need to keep, when they can evict, etc.
+
+Thus memory reuse becomes more effective, because layers that only need recent tokens can evict early, freeing space for other requests.
+
+Request‐aware allocation & eviction
+Jenga incorporates request‐aware allocation: since the serving engine knows the batch of requests coming in, and can predict the prefix lengths, token flows, etc., it can allocate smaller “small pages” appropriately to reduce fragmentation and wasted memory. 
+arXiv
+
+For eviction/caching: By allowing layer/memory‐type to express “prefix subset dependencies”, Jenga can evict more aggressively when certain layers only depend on the most recent tokens rather than the full prefix — thus freeing memory earlier. 
+arXiv
+
+Implementation & Evaluation
+They implemented Jenga integrated with vLLM (an LLM serving engine) covering ~90 models in vLLM v0.6.4. 
+arXiv
+
+In experiments they compare to baseline memory managers (e.g., paged‐attention) on heterogeneous LLMs (vision‐language, multi-modality, varying embedding sizes) and show significant improvements in memory utilization (percentage of GPU memory used for actual embedding vs wasted) and throughput (requests per second/batch size) without increasing latency. 
+arXiv
++1
+
+Limitations / Scope
+A few caveats to note (as discussed or implied in the paper):
+
+It is focused on inference serving of LLMs, specifically the KV cache / embedding storage side of memory management. It is not about training or fine‐tuning (though some ideas might carry over).
+
+It assumes one has knowledge (ahead of time) of embedding sizes and dependency patterns of layers, so the allocator can choose an LCM page size and appropriate policies. For highly dynamic or unknown architectures this might be harder.
+
+While they show big relative improvements for heterogeneous models, for homogeneous simpler models (all same embedding size, full prefix dependency) the baseline methods (paged attention) already work well — so the relative improvement is smaller. Indeed, they show similar performance to optimal allocation in the homogeneous case. 
+arXiv
+
+The method focuses on improving memory utilization and throughput; but in practice other bottlenecks (compute, communication, latency targets) may limit gains.
+
+It is implemented on vLLM; integration with other systems or hardware (e.g., model‐specific kernels, multi-GPU or distributed inference) might require additional engineering.
+
+Take-away
+In short: As LLM architectures become more complex (with mixed modalities, varying embedding sizes, sliding-window or last‐token attention, etc.), existing memory allocation methods designed for homogeneous models begin to falter. The Jenga framework offers a principled solution: use an LCM‐based large‐page allocator to pack embeddings of different sizes efficiently, plus custom layer‐specific sub‐allocators and eviction logic tuned to dependency patterns, thereby reducing memory waste and increasing throughput in serving setups.
+
+If you like, I can pull out a bullet list of the experimental results (models tested, metrics, etc.), or dig into the paper’s pseudocode for the allocator. Would you like that?
+
+You said:
+Modern LLMs increasingly deviate from the simpler “all-layers same size, full-prefix-dependency” assumption:
+
+Embedding dimensions vary (e.g., vision-language models mixing vision embeddings and text embeddings) so the key/value (KV) cache per token or per modality may differ in size. 
+arXiv
+
+Token dependency patterns can vary: some layers attend to full prefix, others attend only to a sliding window or last token (so the set of earlier tokens you must keep in memory differs by layer) — i.e., prefix-subset dependency. 
+arXiv
+
+explain these?
+ChatGPT said:
+Absolutely — let’s break both points down with simple explanations and concrete examples.
+
+✅ 1. Embedding dimensions vary
+Traditional LLMs (like early GPT-style models) use the same hidden size for every layer and every token, e.g.:
+
+All tokens are represented as a vector of size 4096
+
+So their KV cache entries (keys and values stored for attention) are also always the same size.
+
+But newer models don’t follow this uniformity.
+
+Why do embedding sizes differ in modern models?
+Modern architectures mix different token types or internal representations. Examples:
+
+Model Type	Why Sizes Differ	Example
+Vision-Language models	Vision features from a CNN or ViT are much larger than text embeddings	A vision token may be 4096-dim, text token 2048-dim
+Multi-expert or mixture-of-layers	Different layers compute different dimensional projections	Some attention layers use 1280 dims, others 3840
+Hybrid models (Transformers + Mamba, RWKV, etc.)	Not every layer stores attention states the same way	Some may not have KV cache at all
+Impact on KV Cache
+Since KV cache stores past tokens for attention, if the embedding dimensions change, then:
+
+Each stored token takes different memory size
+
+You can’t allocate space with a simple fixed block size anymore
+
+Memory fragmentation increases unless carefully managed
+
+So instead of a neat block like:
+
+[text token][text token][text token][text token]
+You now have something like:
+
+[vision token][text token][vl-projection token][text token]
+Each with different memory footprints.
+
+✅ 2. Token dependency patterns vary
+In classical architectures (GPT-2, GPT-3, early Llama), every attention layer follows:
+
+Every new token can attend to ALL past tokens.
+
+This is called full-prefix dependency.
+
+It means nothing in the KV cache can ever be deleted until the generation ends.
+
+Modern models break this rule
+Some architectures optimize attention by limiting what each layer can look at. Examples:
+
+Pattern	Description	Example Model Behavior
+Sliding-window attention	A layer only attends to the last N tokens (not everything)	A layer may only need last 256 tokens
+Last-token-only attention	Some layers only attend to the immediately previous token	Common in structured KV compression techniques
+Prefix-subset dependency	Different layers need different subsets of prior tokens	Some layers keep global knowledge, others only local
+Why this matters for memory
+If a layer only needs the last 256 tokens, then old tokens:
+
+[Token 1 ... Token 257]
+are useless and their KV cache can be safely deleted — but only for that layer.
+
+So instead of a single KV cache policy, now cache retention differs per layer:
+
+Layer 1 → needs full prefix → keep everything
+Layer 2 → sliding window of 512 tokens → delete older
+Layer 3 → only needs one previous token → keep minimal
+Meaning the memory footprint dynamically evolves.
+
+🔍 Why JENGA cares about both
+These two trends together create a challenge:
+
+Old assumption (easy)	Modern reality (hard)
+All KV entries same size	KV entry size varies by token/modality
+All layers keep all past tokens	Each layer keeps a different set of tokens
+Simple fixed-size memory allocator works	Allocator must be dynamic and fragmentation-aware
+JENGA’s goal is to manage KV cache storage optimally under these heterogeneous constraints so GPU memory isn’t wasted and throughput stays high.
+
+Quick analogy
+Think of a bookshelf:
+
+Old LLMs: all books are the same size, and you must keep every book forever → easy to stack.
+
+Modern LLMs: books are all different sizes, and each shelf decides randomly which books to keep and which to toss → now you need a smarter organization system.
+
+JENGA is that smarter system.
+
+Would you like a visual diagram explaining these patterns, or a real model example (e.g., Llama 3.2-Vision or Mixtral) showing how their KV varies layer-by-layer?
+
+You said:
+This paging sounds very similar to the paging introduced in Efficient Memory Management for Large Language  Model Serving with Paged Attention. How are they different?
+ChatGPT said:
+Great question — you're right that Jenga and Paged Attention share the same core idea:
+
+Break KV cache memory into reusable pages instead of allocating a contiguous buffer per sequence.
+
+But they solve different problems, and the similarity is mostly at the high-level concept, not the implementation detail.
+
+Let’s compare them clearly.
+
+🧱 Paged Attention (from vLLM): What problem does it solve?
+Paged Attention was introduced to solve KV cache fragmentation caused by dynamic batching in LLM inference.
+
+Assumptions in the original design:
+Property	Assumption
+Embedding size	Fixed across all layers and tokens
+Dependency pattern	Every layer attends to the entire prefix
+Cache size per token	Same size for every token
+Eviction policy	FIFO or sequence-complete eviction
+Allocator design	Single unified page size works for all layers
+So Paged Attention solves this problem:
+
+When generating multiple requests with different lengths, KV cache becomes fragmented. Paging allows packing KV-cache memory like an OS memory manager, improving utilization and batching efficiency.
+
+🧩 JENGA: What additional problem does it solve?
+JENGA extends the idea to support heterogeneous architectures, where the previous assumptions no longer hold.
+
+New realities in modern models:
+Property	Old models	New heterogeneous models
+Embedding dims	Same everywhere	Different per layer or token type
+Dependency	Full prefix	Sliding window, selective attention, last-token-only
+Cache size per token	constant	variable
+Eviction	whole-sequence based	per-layer, per-token, dependency-aware
+Paged Attention breaks when:
+
+vision_token = 4096 dims
+text_token = 2048 dims
+layer3 only needs last 64 tokens
+layer10 needs full prefix
+So JENGA introduces:
+
+🔧 Two-level allocation
+Layer	Purpose
+Compatibility allocator	Uses LCM-based fixed large pages that all token sizes can fit evenly into
+Custom layer allocator	Handles sub-pages and layer-specific eviction policies
+🆚 Side-by-side Comparison
+Feature	vLLM Paged Attention	JENGA
+KV page size	One fixed size	LCM-based multi-granularity pages
+Embedding size assumption	Homogeneous	Heterogeneous (per layer/modality)
+Attention pattern assumption	Full prefix	Prefix-subset, sliding window, last-token
+Eviction granularity	Per sequence	Per layer + per dependency pattern
+Fragmentation handling	Handles batching fragmentation	Handles batching and heterogeneous model fragmentation
+Target models	Classic GPT-style	Vision-language, MoE, hybrid, RWKV/Mamba-Transformer hybrids
+Throughput gains	Mostly from batching	From batching + reduced cache footprint + tailored eviction
+📌 Conceptual Summary
+You can think of it like:
+
+System	Analogy
+Paged Attention	A computer that manages memory assuming every app uses same size blocks and never frees memory until it exits.
+JENGA	A modern OS memory manager that supports different block sizes, dynamic reclamation, and app-specific caching rules.
+🚀 Why JENGA is needed now
+Paged Attention was perfect when all models looked like this:
+
+Transformer layer
+→ Multi-head attention
+→ Same KV size at every step
+→ Full autoregressive dependency
+But models now look like this:
+
+Vision Encoder → Large embeddings
+Text layers → Smaller embeddings
+Some layers dump early tokens
+Some require full history
+RWKV/Mamba layers store states instead of KV
+The original allocator cannot handle that efficiently — memory gets wasted or fragmented.
+
+JENGA generalizes paging to handle arbitrary architectural heterogeneity.
+
+Summary in One Line
+Paged Attention solved batching inefficiency for homogeneous transformers; JENGA extends the idea so it works for modern heterogeneous models with variable KV sizes and selective attention dependencies.
+
+Would you like:
+
+a diagram comparing the two paging layouts,
+
+a code-level comparison, or
+
+a real example (e.g., Llama 3.2-Vision) showing how JENGA allocates vs vLLM paging?
+
+I can do any of those.
+
+You said:
+What limitations does this implementation have?
+ChatGPT said:
+The paper Jenga: Effective Memory Management for Serving LLM with Heterogeneity presents a strong solution, but as with most research there are a number of limitations and caveats worth keeping in mind. Here are several — drawn from the paper itself and inferred from its design:
+
+⚠️ Key Limitations
+Prior knowledge required about embedding sizes & layer behaviours
+The system assumes you know in advance the embedding sizes (for all token types and layers) and the token-dependency / caching pattern for each layer (e.g., full prefix vs sliding window vs last-token). Without that information, the allocator cannot compute a suitable least-common-multiple (LCM) sized “large page” and cannot optimize layer-specific eviction policies. 
+arXiv
++1
+
+If a new model emerges with dynamic or unknown embedding sizes (e.g., dynamic modalities, conditional branches) the approach may struggle.
+
+If the actual dependency patterns change at runtime (e.g., a layer sometimes uses full prefix, sometimes sliding window) the pre-configured eviction may mis‐behave.
+
+Granularity & internal fragmentation trade-offs
+Although Jenga uses LCM‐based large pages to reduce fragmentation, choosing an LCM of many embedding sizes can lead to very large page units (worst-case if embedding sizes differ a lot, the LCM becomes large) which may still lead to internal “waste” or cause inefficient allocation (e.g., a small token type using a large page). They discuss this trade in the “Discussion: Different choices of compatibility layer” section. 
+arXiv
+
+Large page size = potential wasted space if many small embeddings use only part of that page.
+
+Very large pages may increase allocation and deallocation overhead, or reduce flexibility in reuse.
+
+Layer‐specific eviction/custom logic may add complexity & runtime overhead
+Because each layer type can have its own eviction/caching policy (based on dependency pattern), the runtime logic becomes more complex: tracking which prefix tokens are needed by which layer, managing when pages can be freed, coordination across layers, etc.
+
+The overhead of this custom tracking may reduce gains or complicate implementation in a production system.
+
+If many layers have different patterns, managing the policies might become a burden.
+
+Assumption of static architecture & model behaviour
+The system seems best suited for somewhat “static” model architectures (where embedding sizes, layer types, dependency patterns are known ahead of time and remain stable). If the model dynamically changes (e.g., dynamic routing, MoE that switches expert size, variable embedding size depending on modality) then the “two‐level allocator” may not adapt as well.
+
+For example in MoE (mixture‐of‐experts) models where different experts have different embedding sizes and which experts are activated may vary per request, the pre‐computed LCM approach may face inefficiencies.
+
+The paper doesn’t deeply evaluate highly dynamic on‐the‐fly architecture variation cases.
+
+Evaluation may not cover all real‐world deployment scenarios
+The paper demonstrates impressive improvements (up to ~79.6% memory utilization improvement, up to ~4.92× throughput) across several models and setups. 
+arXiv
++1
+
+However:
+
+Real‐world systems may have additional constraints (multi‐GPU, distributed inference, heterogeneous hardware, memory oversubscription, mixed batches across model versions) which may introduce new bottlenecks not considered by the paper.
+
+The performance gains depend on how heterogeneous the model is; for more homogeneous models the gains will be smaller (and the overhead of Jenga may not always be justified).
+
+The evaluation appears done on the inference engine vLLM; integration in other serving stacks, with other infrastructure constraints (network, I/O, latency-SLOs) may uncover additional costs.
+
+Possible interaction with other memory/compute bottlenecks
+Jenga addresses the KV cache memory fragmentation and eviction part. But in large-scale inference, memory is just one part of the bottleneck. Compute, data transfer, batching strategy, latency constraints, GPU-DRAM bandwidth, multi-tenant interference may also dominate.
+
+If KV cache memory isn’t the primary bottleneck in a given scenario, then Jenga’s benefits may be marginal.
+
+Some models might be compute‐bound rather than memory‐bound, so optimizing the cache might have limited effects.
+
+Overhead of page management
+The paper mentions that “large pages” (compatibility layer) may suffer from “coarse‐grained memory allocation and significant allocation and deallocation overhead of GPU driver” if not carefully implemented. 
+arXiv
+
+If allocator overhead is high, the benefit of improved memory utilization could be offset by slower allocation or fragmentation inside pages.
+
+The design may require careful tuning for driver/OS/allocator specifics of GPU memory.
+
+🧮 Summary of when the limitations matter
+If your model is homogeneous (same embedding size everywhere, full prefix dependency) → the overhead of Jenga may not be justified; simpler paging methods may suffice.
+
+If your model architecture or serving scenario is highly dynamic (embeddings change size depending on request, experts switch on/off, different modalities each request) → Jenga may require additional engineering to handle that dynamism.
+
+If your system is not memory-bound (e.g., compute or I/O are the bottlenecks) → the relative benefit of investing in this allocator may be small.
+
+If you cannot determine ahead of time the embedding sizes and layer dependency patterns for all layers → creating the right LCM page size and eviction policy might be difficult or suboptimal.
+
+If you like, I can check the paper’s authors’ “Limitations & Future Work” section and pull specific bullet items from there (with quotes). Would that be useful?
+
+You said:
+Assumption of static architecture & model behaviour
+The system seems best suited for somewhat “static” model architectures (where embedding sizes, layer types, dependency patterns are known ahead of time and remain stable). If the model dynamically changes (e.g., dynamic routing, MoE that switches expert size, variable embedding size depending on modality) then the “two‐level allocator” may not adapt as well.
+
+what would a modle like this look like
+ChatGPT said:
+A model that breaks Jenga’s assumptions would be one where the memory layout or KV-cache footprint cannot be known in advance, because the architecture changes depending on:
+
+which inputs are processed,
+
+which routing decisions are made during inference, or
+
+which token modalities appear.
+
+Instead of a predictable, fixed “shape” like a standard transformer, the model’s execution path may vary at runtime.
+
+Here are a few concrete examples of what such a model might look like:
+
+🧠 1. Mixture-of-Experts (MoE) Model With Variable Expert Sizes
+A dynamic MoE transformer where:
+
+Different tokens activate different experts.
+
+Experts are not uniform — some may use 2048-dim embeddings, others 4096-dim.
+
+The selection is token-dependent and changes per batch and per step.
+
+Example workflow:
+
+Token 1 → Expert 3 (3072 dims)
+Token 2 → Expert 7 (6144 dims)
+Token 3 → Expert 3 (3072 dims)
+Token 4 → Expert 11 (4096 dims)
+In this case, the KV cache size per token cannot be predicted ahead of time because the model’s routing function determines it dynamically.
+
+🔧 Why this breaks Jenga:
+
+The LCM-based page size becomes inefficient or impossible because the actual set of activated embedding sizes changes over time.
+
+Eviction logic cannot pre-assign memory because the dependency pattern differs per expert and per token.
+
+🧩 2. Multi-Modal Model With Runtime-Dependent Embeddings
+A flexible multi-modal interface model:
+
+One input might contain text only (2048 dims),
+
+another includes image + text where images produce 4096-dim embeddings,
+
+another includes audio with 8192-dim embeddings,
+
+and formats are interleaved inside a sequence.
+
+Example sequence:
+
+[Text token][Text token][Image feature chunk][Audio chunk][Text token]
+If the lengths and sizes of modality segments vary per request, the KV-cache footprint cannot be statically assigned.
+
+🎭 3. Adaptive Computation Transformer (ACT-style)
+A model where:
+
+Some layers may be skipped dynamically (like early exit models),
+
+Some tokens may go through fewer or more layers depending on difficulty.
+
+So layer usage looks like:
+
+Token	Layers executed
+Easy token	L1→L2→L3 and exit
+Hard token	L1→L2→L3→L4→L5→L6→...
+If layers also differ in embedding size or caching pattern, the KV memory footprint becomes per-token and per-layer variable.
+
+🔁 4. Recurrent Hybrid Models (RWKV / Mamba-Transformer Mix)
+Imagine a hybrid model where:
+
+Some layers are pure attention (KV cache full prefix),
+
+Some layers are recurrent (state vector only, not per-token KV),
+
+Some layers switch mode depending on sequence length or modality.
+
+Example dependency logic:
+
+If token position < 2048 → full attention
+Else → sliding window
+If token type = vision → run special large latent state
+Here, dependency patterns are runtime conditional, not fixed.
+
+🧪 5. Structure-Aware or Program-Generated Models
+Models that dynamically:
+
+Spawn sub-modules,
+
+Execute variable computation graphs (like neural interpreters),
+
+Use token-dependent architecture changes.
+
+Example:
+
+Token triggers sub-network: "invoke parser module"
+Parser module has different KV size and dependency policy.
+📌 Why these models are hard for Jenga
+Jenga assumes:
+
+The embedding space(s) are known ahead of time → so it can build compatible “large pages.”
+
+The cache reuse and eviction schedule is predictable → so per-layer rules can be applied safely.
+
+Dynamic architecture models violate both.
+
+🔍 Summary Table
+Model Type	Static architecture?	KV size predictable?	Good fit for Jenga?
+Standard transformer	Yes	Yes	✅ Excellent
+Vision-language transformer	Mostly yes	Yes	✅ Good
+MoE with uniform expert size	Yes	Yes	⚠️ Good but conditional
+MoE with variable expert size	No	No	❌ Hard
+Hybrid recurrent/attention	Partially	Conditional	⚠️ Limited
+Dynamic computation graph model	No	No	❌ Poor
+If you'd like, I can now:
+Sketch a diagram illustrating dynamic routing memory layouts,
+
+Propose how such a model could be served efficiently,
+
+Or compare how Paged Attention vs Jenga vs Fully Dynamic KV allocators would behave.
+
+Want one of those?
+
+
