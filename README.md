@@ -21,7 +21,7 @@ My learning journey of Compilers for AI course at the University of Michigan
 | **Oct 20-22** | [Repo Deconstruct] <br> [Repo Deconstruct] | Tech Talks |  |
 | **Oct 27-29** | [EffPagedAttn](https://arxiv.org/abs/2309.06180), [EffLLMServ](https://arxiv.org/abs/2503.18292) <br>[NvidiaAmpere](https://arxiv.org/abs/2208.11174), [AMDsDTW](https://arxiv.org/abs/2403.06931) |Papers and Discussion | [EffPagedAttn Notes](https://chatgpt.com/share/691b6994-6478-8005-8593-5478a6a08853), [EffLLMServ Notes](https://chatgpt.com/share/691b72e4-3478-8005-8207-9fb84d51d1f4) <br> [NvidiaAmpere Notes](https://chatgpt.com/share/691b7e97-4e80-8005-bf8e-8ea3a6f7ab2d), [AMDsDTW](https://chatgpt.com/share/691b81a0-a850-8005-894d-1d398833c0da)|
 | **Nov 3-5** | Sick Day<br>Group Presentations | Updates |  |
-| **Nov 10-12** | Group Presentations<br> [TPUs](https://arxiv.org/abs/2304.01433), [MTIA](https://dl.acm.org/doi/pdf/10.1145/3579371.3589348) | Papers and Discussion| [TPUs Notes](https://chatgpt.com/share/691b82c9-0258-8005-86aa-eb601c8cd989)  |
+| **Nov 10-12** | Group Presentations<br> [TPUs](https://arxiv.org/abs/2304.01433), [MTIA](https://dl.acm.org/doi/pdf/10.1145/3579371.3589348) | Papers and Discussion| [TPUs Notes](https://chatgpt.com/share/691b82c9-0258-8005-86aa-eb601c8cd989),  [MTIA Notes](https://chatgpt.com/share/6920d54c-9ca8-8005-afb6-935387b7271f)|
 | **Nov 17-19** | [MLFleet](https://arxiv.org/pdf/2502.06982) + [Special Guest?] <br> [Repo Deconstruct] | Papers and Discussion|  |
 | **Nov 24-26** | Flex Day (Repo Deconstruction Due) <br>Thanksgiving Recess (Holiday) | Presentations |  |
 | **Dec 1-3** | Final Project Presentations<br>Course Wrap-up & Future Directions | Presentations | |
